@@ -33,7 +33,7 @@ char* trimbuf(char* str)
 	char* ibuf;
 
 	if (str == nullptr) return nullptr;
-	for (ibuf = str; *ibuf && (byte)(*ibuf) < (byte)0x80 && isspace(*ibuf); ++ibuf)
+	for (ibuf = str; *ibuf && (byte)(*ibuf) < (byte)0x80 && isspace((unsigned char)(*ibuf)); ++ibuf)
 		;
 
 	int i = Q_strlen(ibuf);
@@ -41,7 +41,7 @@ char* trimbuf(char* str)
 		Q_memmove(str, ibuf, i);
 
 	while (--i >= 0) {
-		if (!isspace(str[i]))
+		if (!isspace((unsigned char)(str[i])))
 			break;
 	}
 	str[i + 1] = '\0';
@@ -63,9 +63,11 @@ void normalize_path(char* path)
 
 bool is_abs_path(const char* path)
 {
+	if (!path || !path[0]) return false;
+
 	if (path[0] == '/') return true;
 #ifdef _WIN32
-	if (path[1] == ':') return true;
+	if (path[0] != '\0' && path[1] == ':') return true;
 	if (path[0] == '\\') return true;
 #endif // _WIN32
 	return false;
@@ -216,4 +218,17 @@ void NORETURN Sys_Error(const char *error, ...)
 	int *null = nullptr;
 	*null = 0;
 	exit(-1);
+}
+
+// A clean interception point for server exit requests, e.g. from the
+// "meta require" command. Gives the engine a moment to flush the
+// message queue before the process terminates.
+void NORETURN do_exit(int status)
+{
+	META_LOG("do_exit(%d); shutting down server", status);
+
+	// Allow chance to read the message, before any window closes.
+	sleep(3);
+
+	exit(status);
 }

@@ -5,6 +5,13 @@ MConfig::MConfig() : m_debuglevel(0), m_gamedll(nullptr), m_exec_cfg(nullptr), m
 	set_directory();
 }
 
+MConfig::~MConfig()
+{
+	free(m_gamedll);
+	free(m_exec_cfg);
+	free(m_filename);
+}
+
 // Initialize default values from the stored options struct.  Has to happen
 // _after_ constructor, so that all the fields are allocated (d'oh).
 void MConfig::init(option_t* global_options)
@@ -47,7 +54,7 @@ bool MConfig::set(option_t* setp, const char* setstr)
 
 	switch (setp->type) {
 	case CF_INT:
-		if (!isdigit(setstr[0])) {
+		if (!isdigit((unsigned char)setstr[0])) {
 			META_ERROR("option '%s' invalid format '%s'", setp->name, setstr);
 			return false;
 		}
@@ -136,8 +143,75 @@ bool MConfig::load(const char* fn)
 		}
 	}
 
+	free(m_filename);
 	m_filename = Q_strdup(loadfile);
 	fclose(fp);
+	return true;
+}
+
+// Write current values of the config options back to the config file.
+// The file is written atomically (temp file + rename) so a crash during
+// saving cannot corrupt the original.
+bool MConfig::save() const
+{
+	char fullname[MAX_PATH];
+
+	if (m_filename) {
+		full_gamedir_path(m_filename, fullname);
+	}
+	else {
+		Q_snprintf(fullname, sizeof fullname, "%s/%s", m_directory, CONFIG_INI);
+	}
+
+	char tempname[MAX_PATH];
+	Q_snprintf(tempname, sizeof tempname, "%s.tmp", fullname);
+
+	FILE* fp = fopen(tempname, "w");
+	if (!fp) {
+		META_ERROR("unable to create config file '%s': %s", tempname, strerror(errno));
+		return false;
+	}
+
+	META_DEBUG(2, "Saving to config file: %s", fullname);
+
+	fprintf(fp, "// %s configuration file\n", APP_VERSION);
+	fprintf(fp, "// Written by 'meta config save' on " __DATE__ " " __TIME__ "\n");
+
+	for (auto optp = m_list; optp->name; optp++) {
+		int* optval = (int *)optp->dest;
+		char** optstr = (char **)optp->dest;
+
+		switch (optp->type) {
+		case CF_INT:
+			fprintf(fp, "%s %d\n", optp->name, *optval);
+			break;
+		case CF_BOOL:
+			fprintf(fp, "%s %s\n", optp->name, *optval ? "yes" : "no");
+			break;
+		case CF_STR:
+		case CF_PATH:
+			if (*optstr)
+				fprintf(fp, "%s %s\n", optp->name, *optstr);
+			break;
+		case CF_NONE:
+			break;
+		}
+	}
+
+	if (fclose(fp) != 0) {
+		META_ERROR("unable to write config file '%s': %s", tempname, strerror(errno));
+		_unlink(tempname);
+		return false;
+	}
+
+	// Replace the previous config file with the new one.
+	if (rename(tempname, fullname) != 0) {
+		META_ERROR("unable to replace config file '%s': %s", fullname, strerror(errno));
+		_unlink(tempname);
+		return false;
+	}
+
+	META_LOG("Config saved to '%s'", fullname);
 	return true;
 }
 

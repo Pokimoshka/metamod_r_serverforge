@@ -16,6 +16,7 @@ metacmd_t g_meta_cmds[] =
 	{"cvars",          cmd_meta_cvarlist},
 	{"game",           cmd_meta_game},
 	{"config",         cmd_meta_config},
+	{"debug",          cmd_meta_debug},
 
 	// arguments: existing plugin(s)
 	{"pause",          []() { cmd_doplug(PC_PAUSE); }},
@@ -46,7 +47,7 @@ void EXT_FUNC server_meta()
 	const char *cmd = CMD_ARGV(1);
 
 	for (auto& meta_cmd : g_meta_cmds) {
-		if (!Q_strcmp(cmd, meta_cmd.name)) {
+		if (!Q_stricmp(cmd, meta_cmd.name)) {
 			meta_cmd.handler();
 			return;
 		}
@@ -63,9 +64,9 @@ void EXT_FUNC client_meta(edict_t* pEntity)
 	META_LOG("ClientCommand 'meta %s' from player '%s'", CMD_ARGS(), STRING(pEntity->v.netname));
 
 	// arguments: none
-	if (!Q_strcmp(cmd, "version"))
+	if (!Q_stricmp(cmd, "version"))
 		client_meta_version(pEntity);
-	else if (!Q_strcmp(cmd, "list"))
+	else if (!Q_stricmp(cmd, "list"))
 		client_meta_pluginlist(pEntity);
 	else {
 		META_CLIENT(pEntity, "Unrecognized meta command: %s", cmd);
@@ -85,6 +86,8 @@ void cmd_meta_usage()
 	META_CONS("   cvars            - list cvars registered by plugins");
 	META_CONS("   refresh          - load/unload any new/deleted/updated plugins");
 	META_CONS("   config           - show config info loaded from config.ini");
+	META_CONS("   config save      - save current config options to config.ini");
+	META_CONS("   debug <level>    - set metamod debug level (0-9)");
 	META_CONS("   load <name>      - find and load a plugin with the given name");
 	META_CONS("   unload <plugin>  - unload a loaded plugin");
 	META_CONS("   reload <plugin>  - unload a plugin and load it again");
@@ -200,8 +203,29 @@ void cmd_meta_refresh()
 // "meta list" console command.
 void cmd_meta_pluginlist()
 {
-	if (CMD_ARGC() != 2) {
-		META_CONS("usage: meta list");
+	if (CMD_ARGC() > 3) {
+		META_CONS("usage: meta list [<plugin>]");
+		return;
+	}
+
+	// With an argument, list only the child plugins of the given plugin
+	// (plugins that were loaded by it).
+	if (CMD_ARGC() == 3) {
+		const char* arg = CMD_ARGV(2);
+		char* endptr;
+		int pindex = strtol(arg, &endptr, 10);
+		bool unique = true;
+		MPlugin* findp = (*arg && !*endptr) ? g_plugins->find(pindex) : g_plugins->find_match(arg, unique);
+
+		if (!findp || !unique) {
+			META_CONS("Couldn't find unique plugin matching '%s'", arg);
+			return;
+		}
+
+		if (!g_config->m_dynalign_list)
+			g_plugins->show_static(findp->index());
+		else
+			g_plugins->show(findp->index());
 		return;
 	}
 
@@ -249,12 +273,51 @@ void cmd_meta_cvarlist()
 // "meta config" console command.
 void cmd_meta_config()
 {
-	if (CMD_ARGC() != 2) {
-		META_CONS("usage: meta cvars");
+	int argc = CMD_ARGC();
+	if (argc != 2 && argc != 3) {
+		META_CONS("usage: meta config [save]");
+		return;
+	}
+
+	if (argc == 3) {
+		if (Q_stricmp(CMD_ARGV(2), "save")) {
+			META_CONS("usage: meta config [save]");
+			return;
+		}
+
+		if (g_config->save())
+			META_CONS("Config options saved successfully.");
+		else
+			META_CONS("Failed to save config options; see log for details.");
+
 		return;
 	}
 
 	g_config->show();
+}
+
+// "meta debug" console command.
+void cmd_meta_debug()
+{
+	if (CMD_ARGC() != 3) {
+		META_CONS("usage: meta debug <level>");
+		META_CONS("   where <level> is a number from 0 to 9.");
+		META_CONS("   current debug level is: %.0f", g_meta_debug.value);
+		return;
+	}
+
+	const char* arg = CMD_ARGV(2);
+	char* endptr;
+	long level = strtol(arg, &endptr, 10);
+
+	if (!*arg || *endptr || level < 0 || level > 9) {
+		META_CONS("Invalid debug level '%s'; expected a number from 0 to 9.", arg);
+		return;
+	}
+
+	CVAR_SET_FLOAT("meta_debug", (float)level);
+	g_config->m_debuglevel = (int)level;
+	META_CONS("Metamod debug level set to %d", (int)level);
 }
 
 // "meta load" console command.
@@ -295,6 +358,28 @@ void cmd_doplug(PLUG_CMD pcmd)
 	const char *cmd = CMD_ARGV(1);
 
 	if (argc < 3) {
+		// "meta pause" / "meta unpause" without arguments applies to all
+		// plugins that are currently running or paused, respectively.
+		if ((pcmd == PC_PAUSE || pcmd == PC_UNPAUSE) && argc == 2) {
+			int affected = 0;
+			for (auto p : *g_plugins->getPlugins()) {
+				if (p->status() < PL_VALID)
+					continue;
+
+				if (pcmd == PC_PAUSE) {
+					if (p->pause())
+						affected++;
+				}
+				else {
+					if (p->unpause())
+						affected++;
+				}
+			}
+
+			META_CONS("%s %d plugin%s", pcmd == PC_PAUSE ? "Paused" : "Unpaused", affected, affected == 1 ? "" : "s");
+			return;
+		}
+
 		META_CONS("usage: meta %s <plugin> [<plugin> ...]", cmd);
 		META_CONS("   where <plugin> can be either the plugin index #");
 		META_CONS("   or a non-ambiguous prefix string matching name, desc, file, or logtag");
@@ -341,7 +426,7 @@ void cmd_doplug(PLUG_CMD pcmd)
 			}
 
 			// Allow chance to read the message, before any window closes.
-			sleep(3);
+			do_exit(1);
 		}
 
 		if (findp && !unique) {
@@ -410,7 +495,7 @@ void cmd_doplug(PLUG_CMD pcmd)
 			else
 				META_CONS("Retry failed for plugin '%s'", findp->description());
 			break;
-			case PC_CLEAR:
+		case PC_CLEAR:
 			if (!findp->clear()) {
 				META_CONS("Clear failed for plugin '%s'", findp->description());
 				return;
@@ -422,7 +507,7 @@ void cmd_doplug(PLUG_CMD pcmd)
 		case PC_INFO:
 			findp->show();
 			break;
-			default:
+		default:
 			META_WARNING("Unexpected plug_cmd: %d", pcmd);
 			META_CONS("Command failed; see log");
 			break;

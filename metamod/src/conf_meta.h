@@ -25,13 +25,16 @@ class MConfig
 {
 public:
 	MConfig();
+	~MConfig();
 
 	void init(option_t* global_options);
 	bool load(const char* filename);
+	bool save() const;
 	bool set(const char* key, const char* value) const;
 	void show() const;
 	void set_directory();
 	const char* directory() const;
+	const char* filename() const;
 
 	int m_debuglevel; // to use for meta_debug
 	char* m_gamedll; // string if specified in config.ini
@@ -51,4 +54,9 @@ private:
 inline const char* MConfig::directory() const
 {
 	return m_directory;
+}
+
+inline const char* MConfig::filename() const
+{
+	return m_filename;
 }

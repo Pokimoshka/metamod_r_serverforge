@@ -32,6 +32,7 @@ void cmd_meta_pluginlist();
 void cmd_meta_cmdlist();
 void cmd_meta_cvarlist();
 void cmd_meta_config();
+void cmd_meta_debug();
 
 void cmd_doplug(PLUG_CMD pcmd);
 

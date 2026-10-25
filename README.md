@@ -5,6 +5,53 @@
 **Metamod-r is recommended to be run with [ReHLDS](https://github.com/rehlds/ReHLDS) (`API 3.1+`).
 There is compatible with original `HLDS`**
 
+## metamod_r_serverforge fork
+
+This repository is a maintained fork of Metamod-r for the ServerForge CS 1.6
+infrastructure. It keeps the full upstream history and adds bug fixes and
+extra functionality on top of the latest upstream release.
+
+### Fixed
+- Fixed stack buffer overflow in `META_CONS`, `META_CLIENT` and
+  `mutil_LogConsole` when a log message is longer than the internal buffer
+  (`Q_vsnprintf`/`_vsnprintf` returns the would-be length on truncation and
+  was used as an index without clamping).
+- Fixed missing format argument in the "forced unload overriding failed
+  detach" debug message (`mplugin.cpp`).
+- Fixed `meta require`: the server now actually exits when a required plugin
+  is missing or failed to load (the original `do_exit(1)` behavior was lost).
+- Fixed "usage: meta cvars" typo in the `meta config` usage message.
+- Fixed stray `b>` prefix that corrupted buffered log messages printed
+  before the engine function table is available.
+- Fixed undefined behavior from passing negative `char` values to `isspace`
+  and `isdigit` (`trimbuf`, config parser).
+- Fixed out-of-bounds read in `is_abs_path` for empty paths.
+- Fixed a null-pointer crash when `/proc/self/maps` cannot be opened on Linux
+  (`CSysModule::load`).
+- Fixed unchecked `VirtualAlloc`/`mmap` failures and an unsigned underflow in
+  `memory_used` in the JIT static allocator; large JIT allocations now get a
+  dedicated contiguous block.
+- Fixed undefined behavior (signed left-shift overflow) in
+  `mutil_MakeRequestId`.
+- Fixed a potential out-of-bounds write in `MPlayerList` for mods with
+  `maxClients` greater than `MAX_CLIENTS`.
+- Added missing allocation failure checks in the Win32 linkent export table
+  combiner.
+- Fixed "chache" typo in the gamedll install log message.
+- `MConfig` now has a destructor and no longer leaks `m_filename` when the
+  config file is loaded more than once.
+
+### Added
+- `meta debug <level>` - set the metamod debug level at runtime.
+- `meta config save` - write the current config options back to `config.ini`
+  (written atomically via a temp file + rename).
+- `meta list <plugin>` - list only the child plugins loaded by the given
+  plugin (by index or non-ambiguous prefix).
+- `meta pause` / `meta unpause` without arguments now pause/unpause all
+  running/paused plugins at once.
+- `meta` commands are now case-insensitive, matching the original Metamod
+  behavior.
+
 |HLDS | [ReHLDS](https://github.com/rehlds/ReHLDS) |  OS | Download |
 |---------| -------|    --- | ---   |
 | :heavy_check_mark: | :heavy_check_mark: `API 3.1+` |![](https://i.imgur.com/AzhAYR4.png)   ![](https://i.imgur.com/t23p9tU.png)   |  [![Download](https://img.shields.io/github/downloads/rehlds/metamod-r/latest/total?sort=date&style=flat-square)](https://github.com/rehlds/metamod-r/releases/latest)

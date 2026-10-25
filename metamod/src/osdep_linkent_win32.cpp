@@ -157,6 +157,13 @@ static bool combine_module_export_tables(CSysModule *meta_module, CSysModule *ga
 	*(void**)&newFunctions = calloc(1, newNumberOfFunctions * sizeof(*newFunctions));
 	*(void**)&newSort      = calloc(1, newNumberOfNames * sizeof(*newSort));
 
+	if (!newFunctions || !newSort) {
+		free(newFunctions);
+		free(newSort);
+		META_ERROR("Couldn't initialize dynamic linkents, memory allocation failed.  Exiting...");
+		return false;
+	}
+
 	// copy moduleMeta to new export
 	for (funcCount = 0; funcCount < exportMM->NumberOfFunctions; funcCount++)
 		newFunctions[funcCount] = rva_to_va(moduleMeta, ((unsigned long *)rva_to_va(moduleMeta, exportMM->AddressOfFunctions))[funcCount]);
@@ -203,6 +210,15 @@ static bool combine_module_export_tables(CSysModule *meta_module, CSysModule *ga
 	//make newNames and newNameOrdinals lists (VirtualAlloc so we dont waste heap memory to stuff that isn't freed)
 	*(void**)&newNames        = VirtualAlloc(0, newNumberOfNames * sizeof(*newNames), MEM_COMMIT, PAGE_READWRITE);
 	*(void**)&newNameOrdinals = VirtualAlloc(0, newNumberOfNames * sizeof(*newNameOrdinals), MEM_COMMIT, PAGE_READWRITE);
+
+	if (!newNames || !newNameOrdinals) {
+		free(newFunctions);
+		free(newSort);
+		if (newNames) VirtualFree(newNames, 0, MEM_RELEASE);
+		if (newNameOrdinals) VirtualFree(newNameOrdinals, 0, MEM_RELEASE);
+		META_ERROR("Couldn't initialize dynamic linkents, VirtualAlloc failed: %i.  Exiting...", GetLastError());
+		return false;
+	}
 
 	for (i = 0; i < newNumberOfNames; i++)
 	{

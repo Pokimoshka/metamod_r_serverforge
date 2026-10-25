@@ -29,7 +29,12 @@ public:
 	}
 
 private:
-	void allocate_page();
+	static size_t align(size_t v, size_t a)
+	{
+		return (v + a - 1) & ~(a - 1);
+	}
+
+	bool allocate_page();
 
 	enum
 	{
@@ -38,6 +43,8 @@ private:
 
 	size_t m_used = 0;
 	std::vector<void *> m_pages;
+	std::vector<void *> m_large_pages;			// contiguous blocks bigger than one page
+	std::vector<size_t> m_large_pages_sizes;	// their sizes, for freeing
 	memory_protection m_protection;
 
 	friend class CJit;

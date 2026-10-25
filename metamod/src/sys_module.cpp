@@ -164,23 +164,24 @@ module_handle_t CSysModule::load(const char *filepath)
 		Q_sprintf(buf, "/proc/%i/maps", getpid());
 
 		FILE* fp = fopen(buf, "r");
+		if (fp) {
+			while (fgets(buf, sizeof buf, fp)) {
+				uintptr_t start, end;
 
-		while (fgets(buf, sizeof buf, fp)) {
-			uintptr_t start, end;
+				int args = sscanf(buf, "%x-%x %128s %128s %128s %128s %255s", &start, &end, dummy, dummy, dummy, dummy, path);
+				if (args != 7) {
+					continue;
+				}
 
-			int args = sscanf(buf, "%x-%x %128s %128s %128s %128s %255s", &start, &end, dummy, dummy, dummy, dummy, path);
-			if (args != 7) {
-				continue;
+				if (!Q_stricmp(path, filepath)) {
+					m_base = start;
+					m_size = end - start;
+					break;
+				}
 			}
 
-			if (!Q_stricmp(path, filepath)) {
-				m_base = start;
-				m_size = end - start;
-				break;
-			}
+			fclose(fp);
 		}
-
-		fclose(fp);
 	}
 
 	return m_handle;

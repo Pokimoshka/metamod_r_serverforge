@@ -509,7 +509,7 @@ bool MPlugin::unload(PLUG_LOADTIME now, PL_UNLOAD_REASON reason, bool& delayed)
 			META_DEBUG(2, "dll: Reload plugin '%s' overriding failed detach", m_desc);
 		}
 		else if (reason == PNL_CMD_FORCED) {
-			META_DEBUG(2, "dll: Forced unload plugin '%s' overriding failed detach");
+			META_DEBUG(2, "dll: Forced unload plugin '%s' overriding failed detach", m_desc);
 		}
 		else {
 			META_WARNING("dll: Failed to detach plugin '%s'; ", m_desc);

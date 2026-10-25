@@ -26,8 +26,13 @@ void META_CONS(const char* fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-	size_t len = Q_vsnprintf(buf, sizeof buf - 1, fmt, ap);
+	int ret = Q_vsnprintf(buf, sizeof buf - 1, fmt, ap);
 	va_end(ap);
+
+	// Guard against truncation and encoding errors; writing past the
+	// buffer here would corrupt the stack (see the '_vsnprintf' contract:
+	// on truncation it returns the length that _would_ have been written).
+	size_t len = (ret < 0 || size_t(ret) >= sizeof buf - 1) ? sizeof buf - 2 : size_t(ret);
 
 	buf[len] = '\n';
 	buf[len + 1] = '\0';
@@ -96,8 +101,11 @@ void META_CLIENT(edict_t* pEntity, const char* fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-	size_t len = Q_vsnprintf(buf, sizeof buf - 1, fmt, ap);
+	int ret = Q_vsnprintf(buf, sizeof buf - 1, fmt, ap);
 	va_end(ap);
+
+	// See META_CONS for the truncation/error handling rationale.
+	size_t len = (ret < 0 || size_t(ret) >= sizeof buf - 1) ? sizeof buf - 2 : size_t(ret);
 
 	buf[len] = '\n';
 	buf[len + 1] = '\0';
@@ -162,7 +170,7 @@ void flush_ALERT_buffer()
 		if (msg->service == mlsDEV && dev == 0) {
 		}
 		else {
-			ALERT(msg->atype, "b>%s %s\n", msg->prefix, msg->buf);
+			ALERT(msg->atype, "%s %s\n", msg->prefix, msg->buf);
 		}
 
 		g_messageQueueStart = g_messageQueueStart->next;

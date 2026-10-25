@@ -79,8 +79,12 @@ void EXT_FUNC mutil_LogConsole(plid_t plid, const char* fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-	size_t len = Q_vsnprintf(buf, sizeof buf - 1, fmt, ap);
+	int ret = Q_vsnprintf(buf, sizeof buf - 1, fmt, ap);
 	va_end(ap);
+
+	// Clamp to the buffer to avoid writing past it on truncation or
+	// encoding errors (see META_CONS in log_meta.cpp).
+	size_t len = (ret < 0 || size_t(ret) >= sizeof buf - 1) ? sizeof buf - 2 : size_t(ret);
 
 	buf[len] = '\n';
 	buf[len + 1] = '\0';
@@ -364,7 +368,9 @@ const char* EXT_FUNC mutil_IsQueryingClientCvar(plid_t plid, const edict_t* pEdi
 int EXT_FUNC mutil_MakeRequestId(plid_t plid)
 {
 	//the offset is to distinguish from gamedll requests, if any
-	return Q_abs(0xbeef << 16) + (++g_requestid_counter);
+	// 0xBEEF0000 doesn't fit into 'int', so compute via the unsigned
+	// modulo arithmetic first to avoid UB on the left shift.
+	return Q_abs((int)(0xBEEF0000u)) + (++g_requestid_counter);
 }
 
 void EXT_FUNC mutil_GetHookTables(plid_t plid, enginefuncs_t** peng, DLL_FUNCTIONS** pdll, NEW_DLL_FUNCTIONS** pnewdll)
