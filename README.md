@@ -40,6 +40,34 @@ extra functionality on top of the latest upstream release.
 - Fixed "chache" typo in the gamedll install log message.
 - `MConfig` now has a destructor and no longer leaks `m_filename` when the
   config file is loaded more than once.
+- Fixed a segfault on map change (e.g. Sven Co-op) caused by unbounded
+  backward stack/code scans in `meta_collect_fix_data` when `esp_save` is
+  stale; the scans are now bounded and bail out gracefully instead of
+  walking into unmapped memory (upstream issue #91).
+- Fixed out-of-bounds array access in `MPlugin::str_loadtime` (the bounds
+  check used `||` instead of `&&`).
+- Fixed `MPlugin::platform_match` comparing the first character of the
+  description against the digit `'0'` instead of the null terminator `'\0'`.
+- Fixed undefined behavior in `CSysModule::load`/`find` (Linux): the `dladdr`
+  result was combined with `&&`, reading an uninitialized `Dl_info` on
+  failure.
+- Fixed `static_allocator::deallocate_all` using `#ifdef WIN32` (never
+  defined) instead of `#ifdef _WIN32`.
+- Fixed `mem_find_string_push` missing a null check when the string pattern
+  is not found.
+- Fixed `MRegCvar` copying the source cvar's `next` pointer, leaving a
+  dangling pointer after the plugin unloads.
+- Fixed swapped `nPlugins`/`nRunPlugins` counters in
+  `MPluginList::show_static`.
+- Fixed `MConfig::set` integer validation only checking the first character
+  (`isdigit`); now uses `strtol` with full validation.
+- Fixed `meta config save` failing on Windows after the first save because
+  the CRT `rename()` cannot overwrite an existing destination.
+- Replaced `memset(pmatch, 0, sizeof(MPlugin))` (undefined behavior for a
+  class with non-trivial members, leaking the module handle and function
+  tables) with a proper `MPlugin::reset()`.
+- Fixed `combine_module_export_tables` (Win32) passing 16-bit export ordinals
+  through `va_to_rva` (they are indices, not addresses).
 
 ### Added
 - `meta debug <level>` - set the metamod debug level at runtime.
