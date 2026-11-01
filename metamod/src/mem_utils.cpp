@@ -51,14 +51,14 @@ char *static_allocator::strdup(const char *string)
 void static_allocator::deallocate_all()
 {
 	for (auto page : m_pages)
-#ifdef WIN32
+#ifdef _WIN32
 		VirtualFree(page, 0, MEM_RELEASE);
 #else
 		munmap(page, Pagesize);
 #endif
 
 	for (size_t i = 0; i < m_large_pages.size(); i++)
-#ifdef WIN32
+#ifdef _WIN32
 		VirtualFree(m_large_pages[i], 0, MEM_RELEASE);
 #else
 		munmap(m_large_pages[i], m_large_pages_sizes[i]);
@@ -176,5 +176,8 @@ char *mem_find_ref(char *pos, char *end, char opcode, uint32 ref, bool relative)
 char *mem_find_string_push(char *addr, const char *string, size_t len)
 {
 	char *ptr = mem_find_pattern(addr, len, string, Q_strlen(string) + 1);
+	if (!ptr)
+		return nullptr;
+
 	return mem_find_ref(addr, addr + len - 5, '\x68', (uint32)ptr, false);
 }

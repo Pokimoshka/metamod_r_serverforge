@@ -54,13 +54,17 @@ bool MConfig::set(option_t* setp, const char* setstr)
 
 	switch (setp->type) {
 	case CF_INT:
-		if (!isdigit((unsigned char)setstr[0])) {
+	{
+		char* endptr;
+		long value = strtol(setstr, &endptr, 10);
+		if (!setstr[0] || *endptr != '\0') {
 			META_ERROR("option '%s' invalid format '%s'", setp->name, setstr);
 			return false;
 		}
-		*optval = Q_atoi(setstr);
+		*optval = (int)value;
 		META_DEBUG(3, "set config int: %s = %d", setp->name, *optval);
 		break;
+	}
 	case CF_BOOL:
 		if (is_yes(setstr)) {
 			*optval = TRUE;
@@ -205,6 +209,12 @@ bool MConfig::save() const
 	}
 
 	// Replace the previous config file with the new one.
+#ifdef _WIN32
+	// The Windows CRT rename() cannot overwrite an existing destination,
+	// so remove the target first. (Not fully atomic, but keeps the temp +
+	// rename strategy for the POSIX path below.)
+	_unlink(fullname);
+#endif
 	if (rename(tempname, fullname) != 0) {
 		META_ERROR("unable to replace config file '%s': %s", fullname, strerror(errno));
 		_unlink(tempname);
