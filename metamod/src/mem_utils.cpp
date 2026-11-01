@@ -80,7 +80,7 @@ size_t static_allocator::memory_used() const
 	return total;
 }
 
-bool static_allocator::contain(uint32 addr)
+bool static_allocator::contain(uint32 addr) const
 {
 	for (auto p : m_pages) {
 		if (uint32(p) <= addr && addr < uint32(p) + Pagesize)
