@@ -2,7 +2,7 @@ name: C/C++ CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths-ignore:
       - '**.md'
       - '.github/**'
@@ -122,6 +122,7 @@ jobs:
         # https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md
         run: |
                $pfxBase64 = "${{ secrets.KEY_PFX_B64 }}"
+               if ([string]::IsNullOrEmpty($pfxBase64)) { Write-Host "No signing certificate configured (KEY_PFX_B64 empty); skipping signing."; exit 0 }
                [IO.File]::WriteAllBytes("${{ github.workspace }}\signing-cert.pfx", [Convert]::FromBase64String($pfxBase64))
                certutil -f -p "${{ secrets.KEY_PFX_PASS }}" -importPFX "${{ github.workspace }}\signing-cert.pfx"
                & 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe' sign /a /f "${{ github.workspace }}\signing-cert.pfx"  /p $env:KEY_PFX_PASS /d "Metamod-R" /du "https://rehlds.dev/" /tr "http://timestamp.digicert.com" /td sha256 /fd sha256 /v ${{ github.workspace }}\publish\addons\metamod\metamod.dll
@@ -172,18 +173,24 @@ jobs:
 
       - name: GPG Import
         run: |
-          echo "${{ secrets.PUB_ASC }}" > "${{ secrets.PUB_ASC_FILE }}"
-          echo "${{ secrets.KEY_ASC }}" > "${{ secrets.KEY_ASC_FILE }}"
+          PUB_ASC="${{ secrets.PUB_ASC }}"
+          KEY_ASC="${{ secrets.KEY_ASC }}"
+          if [[ -z "$PUB_ASC" || -z "$KEY_ASC" ]]; then
+            echo "No GPG keys configured (PUB_ASC/KEY_ASC empty); skipping import."
+            exit 0
+          fi
+          echo "$PUB_ASC" > pub.asc
+          echo "$KEY_ASC" > key.asc
 
           # Import the public key
-          gpg --batch --yes --import "${{ secrets.PUB_ASC_FILE }}"
+          gpg --batch --yes --import pub.asc
           if [[ $? -ne 0 ]]; then
             echo "Error: Failed to import the public key"
             exit 1
           fi
 
           # Import the private key
-          gpg --batch --yes --import "${{ secrets.KEY_ASC_FILE }}"
+          gpg --batch --yes --import key.asc
           if [[ $? -ne 0 ]]; then
             echo "Error: Failed to import the private key"
             exit 2
@@ -297,10 +304,10 @@ jobs:
         run: |
 
           # new runner, niw signs
-          echo "${{ secrets.PUB_ASC }}" > "${{ secrets.PUB_ASC_FILE }}"
-          echo "${{ secrets.KEY_ASC }}" > "${{ secrets.KEY_ASC_FILE }}"
-          gpg --batch --yes --import "${{ secrets.PUB_ASC_FILE }}"
-          gpg --batch --yes --import "${{ secrets.KEY_ASC_FILE }}"
+          echo "${{ secrets.PUB_ASC }}" > pub.asc
+          echo "${{ secrets.KEY_ASC }}" > key.asc
+          gpg --batch --yes --import pub.asc
+          gpg --batch --yes --import key.asc
           GPG_LINUX_FINGERPRINT=$(gpg --list-keys --with-colons | grep '^fpr' | head -n 1 | cut -d: -f10)
           echo "$GPG_LINUX_FINGERPRINT:6:" | gpg --batch --import-ownertrust
           echo "GPG_LINUX_FINGERPRINT=$GPG_LINUX_FINGERPRINT" >> $GITHUB_ENV
